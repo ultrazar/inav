@@ -260,9 +260,13 @@ typedef struct positionEstimationConfig_s {
     float max_eph_epv;  // Max estimated position error acceptable for estimation (cm)
     float baro_epv;     // Baro position error
 
+    bool dynamic_acc_weight;                // To enable/disable the dynamic accelerometer weighting (relative to vibrations and clipping)
+    float temp_correction_a;          
+    float temp_correction_b;
+
 #ifdef USE_GPS_FIX_ESTIMATION
     uint8_t allow_gps_fix_estimation;
-#endif
+#endif            
 } positionEstimationConfig_t;
 
 PG_DECLARE(positionEstimationConfig_t, positionEstimationConfig);
