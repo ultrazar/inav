@@ -263,8 +263,8 @@ typedef struct positionEstimationConfig_s {
 
     uint8_t use_gps_no_baro;
     bool dynamic_acc_weight;                // To enable/disable the dynamic accelerometer weighting (relative to vibrations and clipping)
-    float temp_correction_a;          
-    float temp_correction_b;                   
+    float runtime_gravity_cal_factor;
+    float acc_weight;              
 } positionEstimationConfig_t;
 
 PG_DECLARE(positionEstimationConfig_t, positionEstimationConfig);

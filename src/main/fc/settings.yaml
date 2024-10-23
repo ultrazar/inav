@@ -2398,18 +2398,18 @@ groups:
         default_value: ON
         field: dynamic_acc_weight
         type: bool
-      - name: temp_correction_a
-        description: "Some accelerometers may experience drifting caused by changing temperatures, you can use this parameter and temp_correction_b to establish the linear relationship between the accelerometer drifting and the temperature (the baro needs to be in the FC, where the accelerometer is located) the formula is f(x) = ax + b where f(x) is the calculated offset for x temperature in degrees"
+      - name: runtime_gravity_cal_factor
+        description: "The factor level for the runtime gravity calibration to compensate the accelerometer drifting during flight. The higher the value, the faster it will adjust the gravity calibration. 0 means it this feature is disabled."
         default_value: 0
-        field: temp_correction_a
-        min: -900
-        max: 900
-      - name: temp_correction_b
-        description: "See temp_correction_a"
-        default_value: 0
-        field: temp_correction_b
-        min: -900
-        max: 900
+        field: runtime_gravity_cal_factor
+        min: 0
+        max: 10
+      - name: acc_weight
+        description: ""
+        default_value: 1
+        field: acc_weight
+        min: 0
+        max: 10
 
 
 

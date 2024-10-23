@@ -67,8 +67,7 @@ PG_RESET_TEMPLATE(positionEstimationConfig_t, positionEstimationConfig,
         .use_gps_velned = SETTING_INAV_USE_GPS_VELNED_DEFAULT,                        // "Disabled" is mandatory with gps_dyn_model = Pedestrian
         .use_gps_no_baro = SETTING_INAV_USE_GPS_NO_BARO_DEFAULT,                      // Use GPS altitude if no baro is available on all aircrafts
         .dynamic_acc_weight = SETTING_DYNAMIC_ACC_WEIGHT_DEFAULT,
-        .temp_correction_a = SETTING_TEMP_CORRECTION_A_DEFAULT,
-        .temp_correction_b = SETTING_TEMP_CORRECTION_B_DEFAULT,
+        .runtime_gravity_cal_factor = SETTING_RUNTIME_GRAVITY_CAL_FACTOR_DEFAULT,
         .allow_dead_reckoning = SETTING_INAV_ALLOW_DEAD_RECKONING_DEFAULT,
 
         .max_surface_altitude = SETTING_INAV_MAX_SURFACE_ALTITUDE_DEFAULT,
@@ -436,7 +435,7 @@ static void updateIMUTopic(timeUs_t currentTimeUs)
         if (positionEstimationConfig()->dynamic_acc_weight) {
             updateIMUEstimationWeight(dt);
         } else {
-            posEstimator.imu.accWeightFactor = 0.3f;
+            posEstimator.imu.accWeightFactor = positionEstimationConfig()->acc_weight;
         }
 
         fpVector3_t accelBF;
@@ -457,22 +456,11 @@ static void updateIMUTopic(timeUs_t currentTimeUs)
         /* Read acceleration data in NEU frame from IMU */
         posEstimator.imu.accelNEU.x = accelBF.x;
         posEstimator.imu.accelNEU.y = accelBF.y;
-        const float baroTemperature = baroGetTemperature();
-        /* Some accelerometers may experience drifting caused by changing temperatures, 
-        you can use these 2 parameters to establish the linear relationship between the accelerometer drifting and the temperature 
-        (the baro needs to be in the FC, where the accelerometer is located)
-        The formula is the following: f(x) = ax + b
-        where f(x) is the calculated offset, a is how the offset varies for each degree, x is the barometer temperature in celsius and b would be the offset for 0ºC scenario 
-         What works well for me is:
-        temp_correction_a = 4.834
-        temp_correction_b = -217.53
-         */
-        const float acc_z_offset = ( positionEstimationConfig()->temp_correction_a * ( baroTemperature / 10.0f ) ) + positionEstimationConfig()->temp_correction_b; // f(x) = ax + b
-        posEstimator.imu.accelNEU.z = accelBF.z + acc_z_offset; 
+        posEstimator.imu.accelNEU.z = accelBF.z; 
 
         /* When unarmed, assume that accelerometer should measure 1G. Use that to correct accelerometer gain */
-        if (gyroConfig()->init_gyro_cal_enabled) {
-            if (!ARMING_FLAG(ARMED) && !gravityCalibrationComplete()) {
+        if (!ARMING_FLAG(ARMED)) {
+            if (gyroConfig()->init_gyro_cal_enabled && !gravityCalibrationComplete()) {
                 zeroCalibrationAddValueS(&posEstimator.imu.gravityCalibration, posEstimator.imu.accelNEU.z);
 
                 if (gravityCalibrationComplete()) {
@@ -480,10 +468,10 @@ static void updateIMUTopic(timeUs_t currentTimeUs)
                     setGravityCalibration(posEstimator.imu.calibratedGravityCMSS);
                     LOG_DEBUG(POS_ESTIMATOR, "Gravity calibration complete (%d)", (int)lrintf(posEstimator.imu.calibratedGravityCMSS));
                 }
+            } else {
+                posEstimator.imu.gravityCalibration.params.state = ZERO_CALIBRATION_DONE;
+                posEstimator.imu.calibratedGravityCMSS = gyroConfig()->gravity_cmss_cal;
             }
-        } else {
-            posEstimator.imu.gravityCalibration.params.state = ZERO_CALIBRATION_DONE;
-            posEstimator.imu.calibratedGravityCMSS = gyroConfig()->gravity_cmss_cal;
         }
 
         /* If calibration is incomplete - report zero acceleration */
@@ -493,6 +481,9 @@ static void updateIMUTopic(timeUs_t currentTimeUs)
                 posEstimator.imu.calibratedGravityCMSS = GRAVITY_CMSS;
             }
 #endif
+            const float factor =  positionEstimationConfig()->runtime_gravity_cal_factor * dt; // This is the factor for the runtime accelerometer gravity calibration
+            posEstimator.imu.calibratedGravityCMSS *= 1.0f - factor; // Smoothing the accelerometer curve to get the actual accelerometer drift
+            posEstimator.imu.calibratedGravityCMSS += accelBF.z * factor;
             posEstimator.imu.accelNEU.z -= posEstimator.imu.calibratedGravityCMSS;
         }
         else {
@@ -505,6 +496,7 @@ static void updateIMUTopic(timeUs_t currentTimeUs)
         navAccNEU[X] = posEstimator.imu.accelNEU.x;
         navAccNEU[Y] = posEstimator.imu.accelNEU.y;
         navAccNEU[Z] = posEstimator.imu.accelNEU.z;
+        DEBUG_SET(DEBUG_VIBE, 6, posEstimator.imu.calibratedGravityCMSS);
     }
 }
 
